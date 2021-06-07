@@ -2,6 +2,12 @@ const { Requester, Validator } = require('@chainlink/external-adapter')
 const FormData = require('form-data')
 const fs = require('fs-extra')
 const IPFS = require('ipfs-core')
+const { ApiPromise, WsProvider } = require('@polkadot/api')
+const { typesBundleForPolkadot } = require('@crustio/type-definitions')
+const { sendTx } = require('./util');
+
+const ipfsUploaderSecret = process.env.IPFS_SECRET
+const crustSeeds = process.env.CRUST_SEEDS
 
 // Define custom error scenarios for the API.
 // Return true for the adapter to retry.
@@ -10,7 +16,7 @@ const customError = (data) => {
   return false
 }
 
-// //  curl -X POST -F file=@test.json "http://127.0.0.1:5001/api/v0/add?quiet=<value>&quieter=<value>&silent=<value>&progress=<value>&trickle=<value>&only-hash=<value>&wrap-with-directory=<value>&chunker=size-262144&pin=true&raw-leaves=<value>&nocopy=<value>&fscache=<value>&cid-version=<value>&hash=sha2-256&inline=<value>&inline-limit=32"
+// curl -X POST -F file=@test.json "http://127.0.0.1:5001/api/v0/add?quiet=<value>&quieter=<value>&silent=<value>&progress=<value>&trickle=<value>&only-hash=<value>&wrap-with-directory=<value>&chunker=size-262144&pin=true&raw-leaves=<value>&nocopy=<value>&fscache=<value>&cid-version=<value>&hash=sha2-256&inline=<value>&inline-limit=32"
 
 // Define custom parameters to be used by the adapter.
 // Extra parameters can be stated in the extra object,
@@ -42,17 +48,19 @@ const createRequest = (input, callback) => {
   const progress = validator.validated.data.progress || 'false'
   const trickle = validator.validated.data.trickle || 'false'
   const pin = validator.validated.data.pin || 'true'
-  let file = validator.validated.data.file
   const arg = validator.validated.data.arg
+  const ipfs_host = validator.validated.data.ipfs_host || 'https://crustwebsites.net/'
+  const crust_host = validator.validated.data.crust_host || 'wss://api.crust.network'
+  const method = validator.validated.data.method || 'api/v0/add'
   const text_for_file = validator.validated.data.text_for_file
   const text_for_file_name = validator.validated.data.text_for_file_name
-  const ipfs_host = validator.validated.data.ipfs_host || 'http://127.0.0.1:5001/'
-  const endpoint = validator.validated.data.endpoint || 'api/v0/add'
-  const starting_char = validator.validated.data.starting_char || 0
+  let file = validator.validated.data.file
 
-  const url = `${ipfs_host}${endpoint}`
+  const ipfsUrl = `${ipfs_host}${method}`
+  const crustUrl = crust_host
 
-  const params = {
+  // IPFS params
+  const ipfsParams = {
     pin,
     trickle,
     progress,
@@ -68,63 +76,65 @@ const createRequest = (input, callback) => {
   // method = 'get' 
   // headers = 'headers.....'
 
-  //application/x-www-form-urlencoded
+  // application/x-www-form-urlencoded
   // headers: { 'content-type': 'application/x-www-form-urlencoded' },
-  if (text_for_file_name != null) {
-    fs.writeFileSync('./file_uploads/' + text_for_file_name, text_for_file)
-    console.log(text_for_file + ' > ' + text_for_file_name)
-    console.log(text_for_file_name)
+  if (text_for_file_name && text_for_file) {
     file = './file_uploads/' + text_for_file_name
-    console.log(file)
+    fs.writeFileSync(file, text_for_file)
+    //console.log($`Writing ${text_for_file} + '\n> ' + ${file}`)
   }
-
 
   const form = new FormData()
   let form_config = {}
-  console.log("THIS  THIS THE FILE" + file)
+  console.log(`Pin ${file} to ${ipfsUrl}`)
+
   if (file != null) {
     form.append('file', fs.createReadStream(file))
     form_config = {
       data: form,
       headers: {
         "Content-Type": "multipart/form-data",
+        "Authorization": `Basic ${ipfsUploaderSecret}`,
         ...form.getHeaders()
       }
     }
   }
 
-  const config = {
-    url,
-    params,
+  const ipfsConfig = {
+    url: ipfsUrl,
+    params: ipfsParams,
     method: 'POST',
     ...form_config
   }
-  console.log(config)
-  // fileUpload(file){ 
-  //   const url = 'http://example.com/file-upload'; 
-  //   const formData = new FormData(); 
-  //   formData.append('file',file) 
-  //   const config = { headers: { 'content-type': 'multipart/form-data' } } 
-  //   return post(url, formData, config) 
-  // }
+  console.log(ipfsConfig)
 
-  // The Requester allows API calls be retry in case of timeout
+  // The Requester allows IPFS API calls be retry in case of timeout
   // or connection failure
-  Requester.request(config, customError)
-    .then(response => {
+  Requester.request(ipfsConfig, customError)
+    .then(async (response) => {
       // It's common practice to store the desired value at the top-level
       // result key. This allows different adapters to be compatible with
       // one another.
       console.log(response.data)
-      response.data.result = response.data.Hash
-      console.log(starting_char)
-      if (starting_char > 0) {
-        console.log("test")
-        response.data.result = response.data.result.substring(starting_char, response.data.result.length)
-        console.log(response.data.result)
 
+      const cid = response.data.Hash
+      // Request crust endpoint to place storage order
+      const size = response.data.Size
+      const crustChain = new ApiPromise({
+        provider: new WsProvider(crustUrl),
+        typesBundle: typesBundleForPolkadot
+      });
+      await crustChain.isReadyOrError;
+
+      const tx = crustChain.tx.market.placeStorageOrder(cid, size, 0);
+      const res = await sendTx(tx, crustSeeds);
+      if (res) {
+        console.log(`Publish ${cid} success`)
+      } else {
+        console.error('Publish failed with \'Send transaction failed\'')
       }
 
+      response.data.result = cid
       callback(response.status, Requester.success(jobRunID, response))
     })
     .catch(error => {
@@ -165,11 +175,8 @@ exports.handlerv2 = (event, context, callback) => {
 // or for running in express
 module.exports.createRequest = createRequest
 
-
 // curl -X POST -H "content-type:application/json" "http://localhost:8080/" --data '{ "id": 0, "data": {"file":"test.json"}}'
 // curl -X POST "http://127.0.0.1:5001/api/v0/block/get?arg=QmTgqnhFBMkfT9s8PHKcdXBn1f5bG3Q5hmBaR4U6hoTvb1"
 // curl -X POST "http://127.0.0.1:5001/api/v0/cat?arg=Qmc2gHt642hnf27iptGbbrEG94vwGnVH48KyeMtjCF5icH"
-
 // curl -X POST "http://127.0.0.1:5001/api/v0/add" -F file=@test.json
-
 // curl -X POST -H "content-type:application/json" "http://localhost:8080/" --data '{ "id": 0, "data": {"endpoint":"api/v0/cat", "arg":"Qmc2gHt642hnf27iptGbbrEG94vwGnVH48KyeMtjCF5icH"}}'
