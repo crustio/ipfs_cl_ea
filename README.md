@@ -24,7 +24,6 @@ Output:
     "Size":"20",
     "result":"QmVg3Z7A4pWLg9Ynqg4b7jDUQwZPzGCHaWafe3fUY4r7x2"
   },
-  "result":"QmVg3Z7A4pWLg9Ynqg4b7jDUQwZPzGCHaWafe3fUY4r7x2",
   "statusCode":200
 }
 
@@ -56,7 +55,6 @@ Output:
 
 ```
 
-
 ### Store file on Crust locally (must be on the same device)
 
 Input:
@@ -83,7 +81,6 @@ Output:
 
 ```
 
-
 ### Cat file by using gateway
 
 Input:
@@ -95,7 +92,16 @@ curl -X POST -H "content-type:application/json" "http://localhost:8080/" --data 
 Output:
 
 ```json
-{"jobRunID":0,"data":{"cat":"This is test"},"statusCode":200}
+{
+  "jobRunID":0,
+  "data":
+  {
+    "text":"This is test",
+    "result":"QmVg3Z7A4pWLg9Ynqg4b7jDUQwZPzGCHaWafe3fUY4r7x2"
+  },
+  "result":"QmVg3Z7A4pWLg9Ynqg4b7jDUQwZPzGCHaWafe3fUY4r7x2",
+  "statusCode":200
+}
 ```
 
 ## Install Locally

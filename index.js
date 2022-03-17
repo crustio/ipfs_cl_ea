@@ -38,23 +38,26 @@ const createRequest = (input, callback) => {
   const method = validator.validated.data.method
   if (!method) {
     callback(400, Requester.errored(jobRunID, "Please provide method from 'pin', 'add', 'cat'"))
+    return
   }
-  var endpoint = supportMethods.get(method)
+  let endpoint = supportMethods.get(method)
   if (!endpoint) {
     callback(400, Requester.errored(jobRunID, "Please provide method from 'pin', 'add', 'cat'"))
+    return
   }
   if ((method === "pin" || method === "cat") && !validator.validated.data.cid) {
     callback(400, Requester.errored(jobRunID, "Please provide cid"))
+    return
   }
 
   // 2.1 IPFS configuration
   const ipfs_host = validator.validated.data.ipfs_host || process.env.IPFS_HOST || 'https://crustwebsites.net/'
   const crust_host = validator.validated.data.crust_host || process.env.CRUST_HOST || 'wss://rpc.crust.network'
 
-  const ipfsParams = {}
+  let ipfsParams = {}
   if (validator.validated.data.cid) {
     ipfsParams = {
-      arg: cid
+      arg: validator.validated.data.cid
     }
   }
 
@@ -67,7 +70,7 @@ const createRequest = (input, callback) => {
   if (text_for_file_name && text_for_file) {
     file = './file_uploads/' + text_for_file_name
     fs.writeFileSync(file, text_for_file)
-    //console.log($`Writing ${text_for_file} + '\n> ' + ${file}`)
+    // console.log($`Writing ${text_for_file} + '\n> ' + ${file}`)
   }
 
   // 3.3 Put file into form
@@ -96,18 +99,18 @@ const createRequest = (input, callback) => {
     method: 'POST',
     ...form_config
   }
-  console.log(ipfsConfig)
+  // console.log(ipfsConfig)
 
   // 4.2 The Requester allows IPFS API calls be retry in case of timeout
   // or connection failure
   Requester.request(ipfsConfig, customError)
     .then(async (response) => {
-      console.log(response.data)
+      // console.log(response.data)
 
       if (method === 'add' || method === 'pin') {
         // 4.3 Request crust endpoint to place storage order
         const cid = response.data.Hash
-        const size = 0
+        let size = 0
         if (method === 'pin') {
           size = response.data.CumulativeSize
         } else {
@@ -127,8 +130,12 @@ const createRequest = (input, callback) => {
         } else {
           console.error('Publish failed with \'Send transaction failed\'')
         }
-
         response.data.result = cid
+      } else {
+        response.data = {
+          text: response.data,
+          result: validator.validated.data.cid
+        }
       }
 
       callback(response.status, Requester.success(jobRunID, response))
