@@ -32,14 +32,15 @@ const customParams = {
   file: false,
   ipfs_host: false,
   endpoint: false,
-  arg: false,
-  starting_char: false
+  arg: false
 }
 
 const createRequest = (input, callback) => {
-  // The Validator helps you validate the Chainlink request data
+  // 1.1 The Validator helps you validate the Chainlink request data
   const validator = new Validator(callback, input, customParams)
   const jobRunID = validator.validated.id
+
+  // 2.1 IPFS configuration
   const quiet = validator.validated.data.quiet || 'false'
   const quieter = validator.validated.data.quieter || 'false'
   const silent = validator.validated.data.silent || 'false'
@@ -50,14 +51,9 @@ const createRequest = (input, callback) => {
   const ipfs_host = validator.validated.data.ipfs_host || 'https://crustwebsites.net/'
   const crust_host = validator.validated.data.crust_host || 'wss://rpc.crust.network'
   const endpoint = validator.validated.data.endpoint || 'api/v0/add'
-  const text_for_file = validator.validated.data.text_for_file
-  const text_for_file_name = validator.validated.data.text_for_file_name
-  let file = validator.validated.data.file
 
+  // 2.2 IPFS params
   const ipfsUrl = `${ipfs_host}${endpoint}`
-  const crustUrl = crust_host
-
-  // IPFS params
   const ipfsParams = {
     pin,
     trickle,
@@ -68,24 +64,21 @@ const createRequest = (input, callback) => {
     arg
   }
 
-  // This is where you would add method and headers
-  // you can add method like GET or POST and add it to the config
-  // The default is GET requests
-  // method = 'get' 
-  // headers = 'headers.....'
+  // 3.1 File configuration
+  const text_for_file = validator.validated.data.text_for_file
+  const text_for_file_name = validator.validated.data.text_for_file_name
+  let file = validator.validated.data.file
 
-  // application/x-www-form-urlencoded
-  // headers: { 'content-type': 'application/x-www-form-urlencoded' },
+  // 3.2 Create file from text and name
   if (text_for_file_name && text_for_file) {
     file = './file_uploads/' + text_for_file_name
     fs.writeFileSync(file, text_for_file)
     //console.log($`Writing ${text_for_file} + '\n> ' + ${file}`)
   }
 
+  // 3.3 Put file into form
   const form = new FormData()
   let form_config = {}
-  console.log(`Pin ${file} to ${ipfsUrl}`)
-
   if (file != null) {
     const ipfsUploaderSecret = loadAuth(crustSeeds)
     form.append('file', fs.createReadStream(file))
@@ -99,6 +92,7 @@ const createRequest = (input, callback) => {
     }
   }
 
+  // 4.1 The whole configuration
   const ipfsConfig = {
     url: ipfsUrl,
     params: ipfsParams,
@@ -107,33 +101,37 @@ const createRequest = (input, callback) => {
   }
   console.log(ipfsConfig)
 
-  // The Requester allows IPFS API calls be retry in case of timeout
+  // 4.2 The Requester allows IPFS API calls be retry in case of timeout
   // or connection failure
   Requester.request(ipfsConfig, customError)
     .then(async (response) => {
-      // It's common practice to store the desired value at the top-level
-      // result key. This allows different adapters to be compatible with
-      // one another.
       console.log(response.data)
+      
+      if (endpoint === 'api/v0/add') {
+        // 4.3 Request crust endpoint to place storage order
+        const cid = response.data.Hash
+        const size = response.data.Size
+        const crustChain = new ApiPromise({
+          provider: new WsProvider(crust_host),
+          typesBundle: typesBundleForPolkadot
+        })
+        await crustChain.isReadyOrError
 
-      const cid = response.data.Hash
-      // Request crust endpoint to place storage order
-      const size = response.data.Size
-      const crustChain = new ApiPromise({
-        provider: new WsProvider(crustUrl),
-        typesBundle: typesBundleForPolkadot
-      });
-      await crustChain.isReadyOrError;
+        const tx = crustChain.tx.market.placeStorageOrder(cid, size, 0, 0)
+        const res = await sendTx(tx, crustSeeds)
 
-      const tx = crustChain.tx.market.placeStorageOrder(cid, size, 0, 0);
-      const res = await sendTx(tx, crustSeeds);
-      if (res) {
-        console.log(`Publish ${cid} success`)
+        if (res) {
+          console.log(`Publish ${cid} success`)
+        } else {
+          console.error('Publish failed with \'Send transaction failed\'')
+        }
+
+        response.data.result = cid
       } else {
-        console.error('Publish failed with \'Send transaction failed\'')
+         // 4.4 Other request
+        response.data.result = response.data.Hash
       }
 
-      response.data.result = cid
       callback(response.status, Requester.success(jobRunID, response))
     })
     .catch(error => {
