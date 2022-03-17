@@ -49,12 +49,12 @@ const createRequest = (input, callback) => {
   const arg = validator.validated.data.arg
   const ipfs_host = validator.validated.data.ipfs_host || 'https://crustwebsites.net/'
   const crust_host = validator.validated.data.crust_host || 'wss://rpc.crust.network'
-  const method = validator.validated.data.method || 'api/v0/add'
+  const endpoint = validator.validated.data.endpoint || 'api/v0/add'
   const text_for_file = validator.validated.data.text_for_file
   const text_for_file_name = validator.validated.data.text_for_file_name
   let file = validator.validated.data.file
 
-  const ipfsUrl = `${ipfs_host}${method}`
+  const ipfsUrl = `${ipfs_host}${endpoint}`
   const crustUrl = crust_host
 
   // IPFS params
@@ -142,36 +142,6 @@ const createRequest = (input, callback) => {
     })
 }
 
-// This is a wrapper to allow the function to work with
-// GCP Functions
-exports.gcpservice = (req, res) => {
-  createRequest(req.body, (statusCode, data) => {
-    res.status(statusCode).send(data)
-  })
-}
-
-// This is a wrapper to allow the function to work with
-// AWS Lambda
-exports.handler = (event, context, callback) => {
-  createRequest(event, (statusCode, data) => {
-    callback(null, data)
-  })
-}
-
-// This is a wrapper to allow the function to work with
-// newer AWS Lambda implementations
-exports.handlerv2 = (event, context, callback) => {
-  createRequest(JSON.parse(event.body), (statusCode, data) => {
-    callback(null, {
-      statusCode: statusCode,
-      body: JSON.stringify(data),
-      isBase64Encoded: false
-    })
-  })
-}
-
-// This allows the function to be exported for testing
-// or for running in express
 module.exports.createRequest = createRequest
 
 // curl -X POST -H "content-type:application/json" "http://localhost:8080/" --data '{ "id": 0, "data": {"file":"test.json"}}'
