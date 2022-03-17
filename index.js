@@ -39,6 +39,7 @@ const createRequest = (input, callback) => {
   // 1.1 The Validator helps you validate the Chainlink request data
   const validator = new Validator(callback, input, customParams)
   const jobRunID = validator.validated.id
+  const ipfsUploaderSecret = loadAuth(crustSeeds)
 
   // 2.1 IPFS configuration
   const quiet = validator.validated.data.quiet || 'false'
@@ -78,9 +79,12 @@ const createRequest = (input, callback) => {
 
   // 3.3 Put file into form
   const form = new FormData()
-  let form_config = {}
+  let form_config = {
+    headers: {
+      "Authorization": `Basic ${ipfsUploaderSecret}`
+    }
+  }
   if (file != null) {
-    const ipfsUploaderSecret = loadAuth(crustSeeds)
     form.append('file', fs.createReadStream(file))
     form_config = {
       data: form,
@@ -106,7 +110,7 @@ const createRequest = (input, callback) => {
   Requester.request(ipfsConfig, customError)
     .then(async (response) => {
       console.log(response.data)
-      
+
       if (endpoint === 'api/v0/add') {
         // 4.3 Request crust endpoint to place storage order
         const cid = response.data.Hash
