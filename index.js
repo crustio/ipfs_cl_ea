@@ -111,7 +111,7 @@ const createRequest = (input, callback) => {
     .then(async (response) => {
       console.log(response.data)
 
-      if (endpoint === 'api/v0/add') {
+      if (endpoint === 'api/v0/add' || endpoint === 'api/v0/pin') {
         // 4.3 Request crust endpoint to place storage order
         const cid = response.data.Hash
         const size = response.data.Size
