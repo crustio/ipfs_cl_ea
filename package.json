@@ -11,8 +11,8 @@
     "@chainlink/external-adapter": "^0.2.3",
     "@crustio/type-definitions": "^1.2.0",
     "@polkadot/api": "4.2.2-4",
-    "@polkadot/keyring": "^8.4.1",
-    "@polkadot/util": "^8.4.1",
+    "@polkadot/keyring": "6.11.1",
+    "@polkadot/util": "6.11.1",
     "fs-extra": "^9.1.0",
     "ipfs-core": "^0.5.2"
   },

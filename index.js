@@ -125,7 +125,7 @@ const createRequest = (input, callback) => {
       });
       await crustChain.isReadyOrError;
 
-      const tx = crustChain.tx.market.placeStorageOrder(cid, size, 0);
+      const tx = crustChain.tx.market.placeStorageOrder(cid, size, 0, 0);
       const res = await sendTx(tx, crustSeeds);
       if (res) {
         console.log(`Publish ${cid} success`)
