@@ -1,13 +1,12 @@
 const { Requester, Validator } = require('@chainlink/external-adapter')
 const FormData = require('form-data')
 const fs = require('fs-extra')
-const IPFS = require('ipfs-core')
 const { ApiPromise, WsProvider } = require('@polkadot/api')
 const { typesBundleForPolkadot } = require('@crustio/type-definitions')
-const { sendTx } = require('./util');
+const { sendTx, loadAuth } = require('./util')
 
-const ipfsUploaderSecret = process.env.IPFS_SECRET
 const crustSeeds = process.env.CRUST_SEEDS
+const supportMethods = new Map([["pin", "api/v0/object/stat"], ["add", "api/v0/add"], ["cat", "api/v0/cat"]])
 
 // Define custom error scenarios for the API.
 // Return true for the adapter to retry.
@@ -16,8 +15,6 @@ const customError = (data) => {
   return false
 }
 
-// curl -X POST -F file=@test.json "http://127.0.0.1:5001/api/v0/add?quiet=<value>&quieter=<value>&silent=<value>&progress=<value>&trickle=<value>&only-hash=<value>&wrap-with-directory=<value>&chunker=size-262144&pin=true&raw-leaves=<value>&nocopy=<value>&fscache=<value>&cid-version=<value>&hash=sha2-256&inline=<value>&inline-limit=32"
-
 // Define custom parameters to be used by the adapter.
 // Extra parameters can be stated in the extra object,
 // with a Boolean value indicating whether or not they
@@ -25,69 +22,64 @@ const customError = (data) => {
 const customParams = {
   text_for_file: false,
   text_for_file_name: false,
-  quiet: false,
-  quieter: false,
-  silent: false,
-  progress: false,
-  trickle: false,
-  pin: false,
   file: false,
   ipfs_host: false,
-  endpoint: false,
-  arg: false,
-  starting_char: false
+  method: false,
+  cid: false
 }
 
 const createRequest = (input, callback) => {
-  // The Validator helps you validate the Chainlink request data
+  // 1.1 The Validator helps you validate the Chainlink request data
   const validator = new Validator(callback, input, customParams)
   const jobRunID = validator.validated.id
-  const quiet = validator.validated.data.quiet || 'false'
-  const quieter = validator.validated.data.quieter || 'false'
-  const silent = validator.validated.data.silent || 'false'
-  const progress = validator.validated.data.progress || 'false'
-  const trickle = validator.validated.data.trickle || 'false'
-  const pin = validator.validated.data.pin || 'true'
-  const arg = validator.validated.data.arg
-  const ipfs_host = validator.validated.data.ipfs_host || 'https://crustwebsites.net/'
-  const crust_host = validator.validated.data.crust_host || 'wss://api.crust.network'
-  const method = validator.validated.data.method || 'api/v0/add'
+  const ipfsUploaderSecret = loadAuth(crustSeeds)
+
+  // 1.2 Analyze method
+  const method = validator.validated.data.method
+  if (!method) {
+    callback(400, Requester.errored(jobRunID, "Please provide method from 'pin', 'add', 'cat'"))
+    return
+  }
+  let endpoint = supportMethods.get(method)
+  if (!endpoint) {
+    callback(400, Requester.errored(jobRunID, "Please provide method from 'pin', 'add', 'cat'"))
+    return
+  }
+  if ((method === "pin" || method === "cat") && !validator.validated.data.cid) {
+    callback(400, Requester.errored(jobRunID, "Please provide cid"))
+    return
+  }
+
+  // 2.1 IPFS configuration
+  const ipfs_host = validator.validated.data.ipfs_host || process.env.IPFS_HOST || 'https://crustwebsites.net/'
+  const crust_host = validator.validated.data.crust_host || process.env.CRUST_HOST || 'wss://rpc.crust.network'
+
+  let ipfsParams = {}
+  if (validator.validated.data.cid) {
+    ipfsParams = {
+      arg: validator.validated.data.cid
+    }
+  }
+
+  // 3.1 File configuration
   const text_for_file = validator.validated.data.text_for_file
   const text_for_file_name = validator.validated.data.text_for_file_name
   let file = validator.validated.data.file
 
-  const ipfsUrl = `${ipfs_host}${method}`
-  const crustUrl = crust_host
-
-  // IPFS params
-  const ipfsParams = {
-    pin,
-    trickle,
-    progress,
-    silent,
-    quieter,
-    quiet,
-    arg
-  }
-
-  // This is where you would add method and headers
-  // you can add method like GET or POST and add it to the config
-  // The default is GET requests
-  // method = 'get' 
-  // headers = 'headers.....'
-
-  // application/x-www-form-urlencoded
-  // headers: { 'content-type': 'application/x-www-form-urlencoded' },
+  // 3.2 Create file from text and name
   if (text_for_file_name && text_for_file) {
     file = './file_uploads/' + text_for_file_name
     fs.writeFileSync(file, text_for_file)
-    //console.log($`Writing ${text_for_file} + '\n> ' + ${file}`)
+    // console.log($`Writing ${text_for_file} + '\n> ' + ${file}`)
   }
 
+  // 3.3 Put file into form
   const form = new FormData()
-  let form_config = {}
-  console.log(`Pin ${file} to ${ipfsUrl}`)
-
+  let form_config = {
+    headers: {
+      "Authorization": `Basic ${ipfsUploaderSecret}`
+    }
+  }
   if (file != null) {
     form.append('file', fs.createReadStream(file))
     form_config = {
@@ -100,41 +92,52 @@ const createRequest = (input, callback) => {
     }
   }
 
+  // 4.1 The whole configuration
   const ipfsConfig = {
-    url: ipfsUrl,
+    url: `${ipfs_host}${endpoint}`,
     params: ipfsParams,
     method: 'POST',
     ...form_config
   }
-  console.log(ipfsConfig)
+  // console.log(ipfsConfig)
 
-  // The Requester allows IPFS API calls be retry in case of timeout
+  // 4.2 The Requester allows IPFS API calls be retry in case of timeout
   // or connection failure
   Requester.request(ipfsConfig, customError)
     .then(async (response) => {
-      // It's common practice to store the desired value at the top-level
-      // result key. This allows different adapters to be compatible with
-      // one another.
-      console.log(response.data)
+      // console.log(response.data)
 
-      const cid = response.data.Hash
-      // Request crust endpoint to place storage order
-      const size = response.data.Size
-      const crustChain = new ApiPromise({
-        provider: new WsProvider(crustUrl),
-        typesBundle: typesBundleForPolkadot
-      });
-      await crustChain.isReadyOrError;
+      if (method === 'add' || method === 'pin') {
+        // 4.3 Request crust endpoint to place storage order
+        const cid = response.data.Hash
+        let size = 0
+        if (method === 'pin') {
+          size = response.data.CumulativeSize
+        } else {
+          size = response.data.size
+        }
+        const crustChain = new ApiPromise({
+          provider: new WsProvider(crust_host),
+          typesBundle: typesBundleForPolkadot
+        })
+        await crustChain.isReadyOrError
 
-      const tx = crustChain.tx.market.placeStorageOrder(cid, size, 0);
-      const res = await sendTx(tx, crustSeeds);
-      if (res) {
-        console.log(`Publish ${cid} success`)
+        const tx = crustChain.tx.market.placeStorageOrder(cid, size, 0, 0)
+        const res = await sendTx(tx, crustSeeds)
+
+        if (res) {
+          console.log(`Publish ${cid} success`)
+        } else {
+          console.error('Publish failed with \'Send transaction failed\'')
+        }
+        response.data.result = cid
       } else {
-        console.error('Publish failed with \'Send transaction failed\'')
+        response.data = {
+          text: response.data,
+          result: validator.validated.data.cid
+        }
       }
 
-      response.data.result = cid
       callback(response.status, Requester.success(jobRunID, response))
     })
     .catch(error => {
@@ -143,40 +146,4 @@ const createRequest = (input, callback) => {
     })
 }
 
-// This is a wrapper to allow the function to work with
-// GCP Functions
-exports.gcpservice = (req, res) => {
-  createRequest(req.body, (statusCode, data) => {
-    res.status(statusCode).send(data)
-  })
-}
-
-// This is a wrapper to allow the function to work with
-// AWS Lambda
-exports.handler = (event, context, callback) => {
-  createRequest(event, (statusCode, data) => {
-    callback(null, data)
-  })
-}
-
-// This is a wrapper to allow the function to work with
-// newer AWS Lambda implementations
-exports.handlerv2 = (event, context, callback) => {
-  createRequest(JSON.parse(event.body), (statusCode, data) => {
-    callback(null, {
-      statusCode: statusCode,
-      body: JSON.stringify(data),
-      isBase64Encoded: false
-    })
-  })
-}
-
-// This allows the function to be exported for testing
-// or for running in express
 module.exports.createRequest = createRequest
-
-// curl -X POST -H "content-type:application/json" "http://localhost:8080/" --data '{ "id": 0, "data": {"file":"test.json"}}'
-// curl -X POST "http://127.0.0.1:5001/api/v0/block/get?arg=QmTgqnhFBMkfT9s8PHKcdXBn1f5bG3Q5hmBaR4U6hoTvb1"
-// curl -X POST "http://127.0.0.1:5001/api/v0/cat?arg=Qmc2gHt642hnf27iptGbbrEG94vwGnVH48KyeMtjCF5icH"
-// curl -X POST "http://127.0.0.1:5001/api/v0/add" -F file=@test.json
-// curl -X POST -H "content-type:application/json" "http://localhost:8080/" --data '{ "id": 0, "data": {"endpoint":"api/v0/cat", "arg":"Qmc2gHt642hnf27iptGbbrEG94vwGnVH48KyeMtjCF5icH"}}'
