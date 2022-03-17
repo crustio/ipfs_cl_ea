@@ -9,7 +9,7 @@ Save and load file on Crust.
 Input:
 
 ```bash
-curl -X POST -H "content-type:application/json" "http://localhost:8080/" --data '{ "id": 0, "data": {"text_for_file_name":"test2", "text_for_file":"This is test"}}'
+curl -X POST -H "content-type:application/json" "http://localhost:8080/" --data '{ "id": 0, "data": {"method":"add","text_for_file_name":"test2", "text_for_file":"This is test"}}'
 ```
 
 Output:
@@ -35,7 +35,7 @@ Output:
 Input:
 
 ```bash
-curl -X POST -H "content-type:application/json" "http://localhost:8080/" --data '{ "id": 0, "data": {"endpoint":"api/v0/pin", "arg":"QmVg3Z7A4pWLg9Ynqg4b7jDUQwZPzGCHaWafe3fUY4r7x2"}}'
+curl -X POST -H "content-type:application/json" "http://localhost:8080/" --data '{ "id": 0, "data": {"method":"pin", "cid":"QmVg3Z7A4pWLg9Ynqg4b7jDUQwZPzGCHaWafe3fUY4r7x2"}}'
 ```
 
 Output:
@@ -62,7 +62,7 @@ Output:
 Input:
 
 ```bash
-curl -X POST -H "content-type:application/json" "http://localhost:8080/" --data '{ "id": 0, "data": {"file":"./file_uploads/test.json"}}'
+curl -X POST -H "content-type:application/json" "http://localhost:8080/" --data '{ "id": 0, "data": {"method":"add", "file":"./file_uploads/test.json"}}'
 ```
 
 Output:
@@ -89,7 +89,7 @@ Output:
 Input:
 
 ```bash
-curl -X POST -H "content-type:application/json" "http://localhost:8080/" --data '{ "id": 0, "data": {"endpoint":"api/v0/cat", "arg":"QmVg3Z7A4pWLg9Ynqg4b7jDUQwZPzGCHaWafe3fUY4r7x2"}}'
+curl -X POST -H "content-type:application/json" "http://localhost:8080/" --data '{ "id": 0, "data": {"method":"cat", "cid":"QmVg3Z7A4pWLg9Ynqg4b7jDUQwZPzGCHaWafe3fUY4r7x2"}}'
 ```
 
 Output:
@@ -108,7 +108,9 @@ yarn
 
 ### Set environment variable
 
-EA_PORT: API port, defaults to port 8080
+EA_PORT: API port, default is port 8080
+IPFS_HOST: IPFS gateway host, default is 'https://crustwebsites.net/'
+CRUST_HOST: CRUST WS host, default is 'wss://rpc.crust.network'
 CRUST_SEEDS: Crust account seeds
 
 ### Run
