@@ -1,12 +1,10 @@
 const { Requester, Validator } = require('@chainlink/external-adapter')
 const FormData = require('form-data')
 const fs = require('fs-extra')
-const IPFS = require('ipfs-core')
 const { ApiPromise, WsProvider } = require('@polkadot/api')
 const { typesBundleForPolkadot } = require('@crustio/type-definitions')
-const { sendTx } = require('./util');
+const { sendTx, loadAuth } = require('./util')
 
-const ipfsUploaderSecret = process.env.IPFS_SECRET
 const crustSeeds = process.env.CRUST_SEEDS
 
 // Define custom error scenarios for the API.
@@ -50,7 +48,7 @@ const createRequest = (input, callback) => {
   const pin = validator.validated.data.pin || 'true'
   const arg = validator.validated.data.arg
   const ipfs_host = validator.validated.data.ipfs_host || 'https://crustwebsites.net/'
-  const crust_host = validator.validated.data.crust_host || 'wss://api.crust.network'
+  const crust_host = validator.validated.data.crust_host || 'wss://rpc.crust.network'
   const method = validator.validated.data.method || 'api/v0/add'
   const text_for_file = validator.validated.data.text_for_file
   const text_for_file_name = validator.validated.data.text_for_file_name
@@ -89,6 +87,7 @@ const createRequest = (input, callback) => {
   console.log(`Pin ${file} to ${ipfsUrl}`)
 
   if (file != null) {
+    const ipfsUploaderSecret = loadAuth(crustSeeds)
     form.append('file', fs.createReadStream(file))
     form_config = {
       data: form,

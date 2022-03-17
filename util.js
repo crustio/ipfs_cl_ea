@@ -1,4 +1,5 @@
 const { Keyring } = require('@polkadot/keyring');
+const { u8aToHex } = require('@polkadot/util');
 
 /**
  * Send tx to Crust Network
@@ -59,6 +60,21 @@ function loadKeyringPair(seeds) {
     return krp;
 }
 
+function loadAuth(seeds) {
+    // 1. Construct auth header
+    const keyring = new Keyring();
+    const pair = keyring.addFromUri(seeds);
+
+    // 2 get the signature of the addr
+    const sigRaw = pair.sign(pair.address);
+    const sig = u8aToHex(sigRaw);
+
+    // 3 compile the sig to autHeader
+    const authHeaderRaw = `sub-${pair.address}:${sig}`;
+    return Buffer.from(authHeaderRaw).toString('base64');
+}
+
 module.exports = {
-    sendTx
+    sendTx,
+    loadAuth
 }
