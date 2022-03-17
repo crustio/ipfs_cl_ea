@@ -115,8 +115,11 @@ yarn
 ### Set environment variable
 
 EA_PORT: API port, default is port 8080
+
 IPFS_HOST: IPFS gateway host, default is 'https://crustwebsites.net/'
+
 CRUST_HOST: CRUST WS host, default is 'wss://rpc.crust.network'
+
 CRUST_SEEDS: Crust account seeds
 
 ### Run
