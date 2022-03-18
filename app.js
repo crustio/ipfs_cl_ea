@@ -7,7 +7,7 @@ const port = process.env.EA_PORT || 8080
 const crustSeeds = process.env.CRUST_SEEDS
 const timeout = process.env.TIMEOUT
 
-if (!crustSeeds || timeout) {
+if (!crustSeeds || !timeout) {
   console.error("Please set environment variable 'CRUST_SEEDS' or 'TIMEOUT'!")
 } else {
   app.use(bodyParser.json())
