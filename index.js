@@ -133,8 +133,8 @@ const createRequest = (input, callback) => {
         response.data.result = cid
       } else {
         response.data = {
-          text: response.data,
-          result: validator.validated.data.cid
+          cid: validator.validated.data.cid,
+          result: response.data
         }
       }
 
