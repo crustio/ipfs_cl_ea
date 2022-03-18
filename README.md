@@ -114,13 +114,21 @@ yarn
 
 ### Set environment variable
 
-EA_PORT: API port, default is port 8080
+Necessary:
 
-IPFS_HOST: IPFS gateway host, default is 'https://crustwebsites.net/'
+- CRUST_SEEDS: Crust account seeds
 
-CRUST_HOST: CRUST WS host, default is 'wss://rpc.crust.network'
+- TIMEOUT: IPFS API request timeout, the recommended setting is 300000 (300s)
 
-CRUST_SEEDS: Crust account seeds
+Optional:
+
+- EA_PORT: API port, default is port 8080
+
+- IPFS_HOST: IPFS gateway host, default is 'https://crustwebsites.net/'
+
+- CRUST_HOST: CRUST WS host, default is 'wss://rpc.crust.network'
+
+
 
 ### Run
 
