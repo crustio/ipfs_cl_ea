@@ -51,7 +51,7 @@ const createRequest = (input, callback) => {
   }
 
   // 2.1 IPFS configuration
-  const ipfs_host = validator.validated.data.ipfs_host || process.env.IPFS_HOST || 'https://crustwebsites.net/'
+  const ipfs_host = validator.validated.data.ipfs_host || process.env.IPFS_HOST || 'https://gateway.ipfs.io/'
   const crust_host = validator.validated.data.crust_host || process.env.CRUST_HOST || 'wss://rpc.crust.network'
 
   let ipfsParams = {}
